@@ -1,9 +1,9 @@
-import { bot } from "./bot";
 import { config } from "dotenv";
 import express from "express";
 import cors from "cors";
 import routes from "./routes";
 import { setupSheets } from "./google-sheets";
+import { startBot } from "./bot";
 
 config();
 const app = express();
@@ -18,12 +18,12 @@ app.get("/", (req, res) => {
 });
 
 setupSheets().then(() => {
-  bot.launch();
+  startBot(process.env.BOT_TOKEN!);
   app.listen(PORT, () => {
     console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
   });
 });
 
 // Habilita parada limpa do bot (Ctrl+C)
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+process.once("SIGINT", () => process.exit());
+process.once("SIGTERM", () => process.exit());
