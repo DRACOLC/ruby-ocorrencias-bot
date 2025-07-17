@@ -1,69 +1,30 @@
-// index.js
 require('dotenv').config();
-const { Telegraf } = require('telegraf');
-const { carregarTecnicos, buscarTecnicoPorLogin } = require('./googleSheets');
+const TelegramBot = require('node-telegram-bot-api');
+const { getColaboradores } = require('./googleSheets');
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-const usuariosLogados = new Map();
+let usuariosAutenticados = {};
 
-(async () => {
-  // Carrega técnicos antes de iniciar o bot
-  await carregarTecnicos();
+bot.onText(/\/start/, async (msg) => {
+  const chatId = msg.chat.id;
+  bot.sendMessage(chatId, '👋 Olá! Digite seu login para começar:');
+});
 
-  bot.start((ctx) => {
-    ctx.reply('🤖 Bem-vindo ao Ruby Ocorrências!\n\nDigite seu login para começar.\nExemplo: Z123456');
-  });
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  const texto = msg.text.trim();
 
-  // Middleware para tratar mensagens que não sejam comandos
-  bot.on('text', (ctx, next) => {
-    const texto = ctx.message.text.trim();
+  // Ignorar comandos
+  if (texto.startsWith('/')) return;
 
-    // Se usuário já está logado, deixa passar para próximos handlers
-    if (usuariosLogados.has(ctx.from.id)) return next();
+  const colaboradores = await getColaboradores();
+  const colaborador = colaboradores.find(col => col.login === texto);
 
-    // Se mensagem parece um login válido, tenta autenticar
-    if (/^[A-Za-z]\d{3,6}$/.test(texto)) {
-      const tecnico = buscarTecnicoPorLogin(texto);
-      if (!tecnico) {
-        return ctx.reply('❌ Login não encontrado ou usuário não autorizado.');
-      }
-      usuariosLogados.set(ctx.from.id, tecnico);
-      return ctx.reply(`✅ Login confirmado! Bem-vindo, ${tecnico.nome}.\nÁrea: ${tecnico.area}`);
-    }
-
-    // Se não estiver logado e não enviou login, pede para digitar
-    if (!usuariosLogados.has(ctx.from.id)) {
-      return ctx.reply('🔐 Digite seu login para acessar o sistema.\nExemplo: Z123456');
-    }
-  });
-
-  // Comandos que só usuários logados podem usar
-  bot.use((ctx, next) => {
-    if (!usuariosLogados.has(ctx.from.id)) {
-      return ctx.reply('❌ Faça login primeiro digitando seu código (ex: Z123456).');
-    }
-    return next();
-  });
-
-  bot.command('ocorrencia', (ctx) => {
-    ctx.reply('🛠️ Selecione o tipo de ocorrência:\n1️⃣ Rede Externa\n2️⃣ NAP GPON\n3️⃣ Backbone\n4️⃣ Backbone GPON');
-  });
-
-  bot.command('confirmar', (ctx) => {
-    ctx.reply('✅ Formulário confirmado e enviado.');
-  });
-
-  bot.command('historico', (ctx) => {
-    ctx.reply('📋 Histórico de ocorrências (em breve).');
-  });
-
-  bot.command('status', (ctx) => {
-    const parts = ctx.message.text.split(' ');
-    if (parts.length < 2) return ctx.reply('❗ Use: /status NUMERO_CONTRATO');
-    ctx.reply(`🔎 Consultando status do contrato ${parts[1]}... (em breve)`);
-  });
-
-  bot.launch();
-  console.log('🤖 Bot Ruby Ocorrências rodando...');
-})();
+  if (colaborador) {
+    usuariosAutenticados[chatId] = colaborador;
+    bot.sendMessage(chatId, `✅ Login autorizado, ${colaborador.nome}!\n\nComandos disponíveis:\n/ocorrencia - Iniciar abertura de ocorrência\n/confirmar - Confirmar envio\n/historico - Ver ocorrências\n/status - Status atual`);
+  } else {
+    bot.sendMessage(chatId, '❌ Acesso negado. Usuário não autorizado como técnico.\n\nEntre em contato com o administrador para solicitar acesso.');
+  }
+});
