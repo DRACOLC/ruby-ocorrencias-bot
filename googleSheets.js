@@ -1,44 +1,32 @@
-// googleSheets.js
 const { google } = require('googleapis');
-const path = require('path');
+const fs = require('fs');
 
-const CREDENTIALS_PATH = path.join(__dirname, 'credentials.json');
-const SPREADSHEET_ID = '1o6UwDTMZGyehaTAvdtyF7mD3vd1ZvgiEc2OEtiSG450';
-const RANGE = 'Colaboradores!A2:E';
+const auth = new google.auth.GoogleAuth({
+  keyFile: 'credentials.json',
+  scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+});
 
-let tecnicos = [];
+const spreadsheetId = '1o6UwDTMZGyehaTAvdtyF7mD3vd1ZvgiEc2OEtiSG450';
 
-async function autenticarGoogleSheets() {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: CREDENTIALS_PATH,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-  const authClient = await auth.getClient();
-  return google.sheets({ version: 'v4', auth: authClient });
-}
+async function getColaboradores() {
+  const client = await auth.getClient();
+  const sheets = google.sheets({ version: 'v4', auth: client });
 
-async function carregarTecnicos() {
-  const sheets = await autenticarGoogleSheets();
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: RANGE,
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: 'Colaboradores!A2:E',
   });
 
-  const rows = res.data.values || [];
+  const rows = response.data.values;
+  if (rows.length === 0) return [];
 
-  tecnicos = rows.map(row => ({
-    nome: row[0] || '',
-    login: (row[1] || '').toUpperCase(),
-    empresa: row[2] || '',
-    area: row[3] || '',
-    telefone: row[4] || '',
+  return rows.map((row) => ({
+    nome: row[0],
+    login: row[1],
+    empresa: row[2],
+    area: row[3],
+    telefone: row[4],
   }));
-
-  console.log('Técnicos carregados:', tecnicos);
 }
 
-function buscarTecnicoPorLogin(login) {
-  return tecnicos.find(t => t.login === login.toUpperCase());
-}
-
-module.exports = { carregarTecnicos, buscarTecnicoPorLogin };
+module.exports = { getColaboradores };
